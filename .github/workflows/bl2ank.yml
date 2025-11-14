@@ -1,0 +1,45 @@
+name: WinRDP-Playit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp-session:
+    runs-on: windows-latest
+
+    steps:
+    - name: Load Repository
+      uses: actions/checkout@v4
+
+    - name: Fetch Playit Agent
+      shell: pwsh
+      run: |
+        $url = "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe"
+        $dest = "$env:USERPROFILE\pl.exe"
+        curl.exe -L $url -o $dest
+        Start-Sleep -s 3
+
+    - name: Configure RDP Access
+      shell: pwsh
+      run: |
+        # Allow remote desktop
+        Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server' fDenyTSConnections 0
+        Enable-NetFirewallRule -Group "@FirewallAPI.dll,-28752"
+        Set-ItemProperty 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' UserAuthentication 1
+        # Set password for runneradmin
+        $pass = ConvertTo-SecureString "admin@123" -AsPlainText -Force
+        Set-LocalUser -Name "runneradmin" -Password $pass
+
+    - name: Start Tunnel
+      env:
+        KEY: ${{ secrets.PL2 }}
+      shell: pwsh
+      run: |
+        Start-Process "$env:USERPROFILE\pl.exe" "--secret $env:KEY" -WindowStyle Hidden
+        Start-Sleep -s 4
+        Start-Process "$env:USERPROFILE\pl.exe" -WindowStyle Hidden
+
+    - name: Keep Alive
+      shell: pwsh
+      run: |
+        while ($true) { Start-Sleep -Seconds 300 }
